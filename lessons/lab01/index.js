@@ -47,13 +47,13 @@ app.get('/scream/:message/:recipient', (req, res) => {
     const message = req.params.message;
     const recipient = req.params.recipient;
 
-    const scream = (message + recipient + "!").toUpperCase();
+    const scream = (message + " " + recipient + "!").toUpperCase();
 
     res.json(scream);
 });
 
 
-// MARK: Always last code of RESTFul API
+// MARK: Starting server. ALWAYS LAST
 app.listen(3000, ()=>{
     console.log("Server started")
 })
