@@ -24,34 +24,30 @@ async function main() {
     let db = await connect(mongoUri, dbname);
 
     // 2. CREATE ROUTES
+    // MARK: Get
     app.get('/', function (req, res) {
         res.json({
             "message": "Hello World!"
         });
     })
 
-// MARK: Lab 3, part 2, add fetch id & search fx
+    // const queryParams = req.query;
 
-    app.get("/recipes", async (req, res) => {
-        try {
-            const recipes = await db.collection("recipes").find().project({
-                name: 1,
-                cuisine: 1,
-                tags: 1,
-                prepTime: 1,
-            }).toArray();
+    // // Create a response object
+    // const response = {
+    //     name: queryParams.name,
+    //     cuisine: queryParams.cuisine,
+    //     tags: queryParams.tags,
+    // };
 
-            res.json({ recipes });
-        } catch (error) {
-            console.error("Error fetching recipes:", error);
-            res.status(500).json({ error: "Internal server error" });
-        }
-    });
+    // // Send the response as JSON
+    // res.json(response);
 
     app.get('/recipes', async (req, res) => {
         try {
             const { tags, cuisine, ingredients, name } = req.query;
             let query = {};
+            console.log("Received query parameters:", req.query);
 
             if (tags) {
                 query['tags.name'] = { $in: tags.split(',') };
@@ -83,72 +79,130 @@ async function main() {
         }
     });
 
-    // get recipe details
-    app.get("/recipes/:id", async (req, res) => {
+    // MARK: Post
+    app.post('/recipes', async (req, res) => {
         try {
-            const id = req.params.id;
+            const { name, cuisine, prepTime, cookTime, servings, ingredients, instructions, tags } = req.body;
 
-            app.get('/recipes', async (req, res) => {
-                try {
-                    const { tags, cuisine, ingredients, name } = req.query;
-                    let query = {};
-
-                    if (tags) {
-                        query['tags.name'] = { $in: tags.split(',') };
-                    }
-
-                    if (cuisine) {
-                        query['cuisine.name'] = { $regex: cuisine, $options: 'i' };
-                    }
-
-                    if (ingredients) {
-                        query['ingredients.name'] = { $all: ingredients.split(',').map(i => new RegExp(i, 'i')) };
-                    }
-
-                    if (name) {
-                        query.name = { $regex: name, $options: 'i' };
-                    }
-
-                    const recipes = await db.collection('recipes').find(query).project({
-                        name: 1,
-                        'cuisine.name': 1,
-                        'tags.name': 1,
-                        _id: 0
-                    }).toArray();
-
-                    res.json({ recipes });
-                } catch (error) {
-                    console.error('Error searching recipes:', error);
-                    res.status(500).json({ error: 'Internal server error' });
-                }
-            });
-
-
-            // First, fetch the recipe
-            
-            const recipe = await db.collection("recipes").findOne(
-                { _id: new ObjectId(id) },
-                { projection: { _id: 0 } }
-            );
-
-            if (!recipe) {
-                return res.status(404).json({ error: "Recipe not found" });
+            // Basic validation
+            if (!name || !cuisine || !ingredients || !instructions || !tags) {
+                return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            res.json(recipe);
+            // Fetch the cuisine document
+            const cuisineDoc = await db.collection('cuisines').findOne({ name: cuisine });
+            if (!cuisineDoc) {
+                return res.status(400).json({ error: 'Invalid cuisine' });
+            }
+
+            // Fetch the tag documents
+            const tagDocs = await db.collection('tags').find({ name: { $in: tags } }).toArray();
+            if (tagDocs.length !== tags.length) {
+                return res.status(400).json({ error: 'One or more invalid tags' });
+            }
+
+            // Create the new recipe object
+            const newRecipe = {
+                name,
+                cuisine: {
+                    _id: cuisineDoc._id,
+                    name: cuisineDoc.name
+                },
+                prepTime,
+                cookTime,
+                servings,
+                ingredients,
+                instructions,
+                tags: tagDocs.map(tag => ({
+                    _id: tag._id,
+                    name: tag.name
+                }))
+            };
+
+            // Insert the new recipe into the database
+            const result = await db.collection('recipes').insertOne(newRecipe);
+
+            // Send back the created recipe
+            res.status(201).json({
+                message: 'Recipe created successfully',
+                recipeId: result.insertedId
+            });
         } catch (error) {
-            console.error("Error fetching recipe:", error);
-            res.status(500).json({ error: "Internal server error" });
+            console.error('Error creating recipe:', error);
+            res.status(500).json({ error: 'Internal server error' });
         }
     });
 
 
-}
+    // MARK: Put
+    app.put('/recipes/:id', async (req, res) => {
+        try {
+            const recipeId = req.params.id;
+            const { name, cuisine, prepTime, cookTime, servings, ingredients, instructions, tags } = req.body;
+
+
+            if (!name || !cuisine || !ingredients || !instructions || !tags) {
+                return res.status(400).json({ error: 'Missing required fields' });
+            }
+
+            const cuisineDoc = await db.collection('cuisines').findOne({ name: cuisine });
+            if (!cuisineDoc) {
+                return res.status(400).json({ error: 'Invalid cuisine' });
+            }
+
+            const tagDocs = await db.collection('tags').find({ name: { $in: tags } }).toArray();
+            if (tagDocs.length !== tags.length) {
+                return res.status(400).json({ error: 'One or more invalid tags' });
+            }
+
+            // Create the updated recipe object
+            const updateRecipe = {
+                name,
+                cuisine: {
+                    _id: cuisineDoc._id,
+                    name: cuisineDoc.name
+                },
+                prepTime,
+                cookTime,
+                servings,
+                ingredients,
+                instructions,
+                tags: tagDocs.map(tag => ({
+                    _id: tag._id,
+                    name: tag.name
+                }))
+            };
+
+            // Insert the updated recipe into the database
+            // Client submits an entirely new document to replace the old one, with the same _id
+            const result = await db.collection('recipes').updateOne(
+                { _id: new ObjectId(recipeId) },
+                { $set: updateRecipe }
+            );
+            if (result.matchedCount === 0) {
+                return res.status(404).json({ error: 'Recipe not found' });
+            }
+
+            res.status(201).json({
+                message: 'Recipe updated successfully',
+            });
+        }
+        catch (error) {
+            console.error('Error updating recipe:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    });
+    // MARK: Delete
+    
+};
+
+
+
+
 
 main();
 
-// 3. START SERVER (Don't put any routes after this line)
+// MAKR: 3. START SERVER (Don't put any routes after this line)
 app.listen(3000, function () {
     console.log("Server has started");
-})
-
+});
