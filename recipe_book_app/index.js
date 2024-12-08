@@ -6,6 +6,7 @@ const { ObjectId } = require('mongodb');
 const MongoClient = require("mongodb").MongoClient;
 const mongoUri = process.env.MONGO_URI;
 const dbname = "recipe_book";
+const bcrypt = require('bcrypt')
 
 // 1a. create the app
 const app = express();
@@ -23,6 +24,17 @@ async function connect(uri, dbname) {
 async function main() {
     let db = await connect(mongoUri, dbname);
 
+    app.post('/users', async function (req, res) {
+        const result = await db.collection("users").insertOne({
+            'email': req.body.email,
+            'password': await bcrypt.hash(req.body.password, 12)
+        })
+        res.json({
+            "message": "New user account",
+            "result": result
+        })
+      })
+
     // 2. CREATE ROUTES
     // MARK: Get
     app.get('/', function (req, res) {
@@ -30,18 +42,6 @@ async function main() {
             "message": "Hello World!"
         });
     })
-
-    // const queryParams = req.query;
-
-    // // Create a response object
-    // const response = {
-    //     name: queryParams.name,
-    //     cuisine: queryParams.cuisine,
-    //     tags: queryParams.tags,
-    // };
-
-    // // Send the response as JSON
-    // res.json(response);
 
     app.get('/recipes', async (req, res) => {
         try {
@@ -192,8 +192,26 @@ async function main() {
             res.status(500).json({ error: 'Internal server error' });
         }
     });
+
     // MARK: Delete
-    
+    app.delete('/recipes/:id', async (req, res) => {
+        try {
+            const recipeId = req.params.id;
+
+            // Attempt to delete the recipe
+            const result = await db.collection('recipes').deleteOne({ _id: new ObjectId(recipeId) });
+
+            if (result.deletedCount === 0) {
+                return res.status(404).json({ error: 'Recipe not found' });
+            }
+
+            res.json({ message: 'Recipe deleted successfully' });
+        } catch (error) {
+            console.error('Error deleting recipe:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    });
+
 };
 
 
@@ -202,7 +220,7 @@ async function main() {
 
 main();
 
-// MAKR: 3. START SERVER (Don't put any routes after this line)
+// MARK: 3. START SERVER (Don't put any routes after this line)
 app.listen(3000, function () {
     console.log("Server has started");
 });
