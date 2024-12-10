@@ -1,0 +1,18 @@
+{
+    "title": "Inception",
+    "cast": {
+      "productionCompany": "Warner Bros.",
+      "directedBy": ["Christopher Nolan"],
+      "starring": ["Leonardo DiCaprio", "Joseph Gordon-Levitt", "Elliot Page"]
+    },
+    "runningTime": 148,
+    "releaseDate": "2010-07-16",
+    "plotSummary": "A thief who enters the dreams of others to steal secrets from their subconscious is given the task of planting an idea into the mind of a CEO.",
+    "reviews": {
+      "RottenTomatoes": 86,
+      "Metacritic": 74,
+      "CinemaScore": "A"
+    },
+    "genres": ["Action", "Sci-Fi", "Thriller"]
+  }
+  

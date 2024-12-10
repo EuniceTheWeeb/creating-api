@@ -1,6 +1,6 @@
 // 1. SETUP EXPRESS
 const bcrypt = require('bcrypt');
-require('dotenv').config();
+require('dotenv/lib/main').config();
 const express = require('express');
 const cors = require("cors");
 const { ObjectId } = require('mongodb');
@@ -108,11 +108,18 @@ async function main() {
 
     app.get('/movies', async (req, res) => {
         try {
-            const { title, cast, runningTime, releaseDate, plotSummary, reviews, genres } = req.query;
+            const { title, cast, runningTime, plotSummary, reviews, genres } = req.query;
             let query = {};
 
-            if (title) {
-                query.title = { $regex: title, $options: 'i' };
+            if (genres) {
+                query['genres._id'] = { $in: genres.split(',').map(id => new ObjectId(id)) };
+            }
+            if (plotSummary) {
+                query['plotSummary.name'] = { $regex: plotSummary, $options: 'i' };
+            }
+
+            if (reviews) {
+                query['reviews'] = { $all: reviews.split(',').map(i => new RegExp(i, 'i')) };
             }
             if (cast) {
                 query['cast'] = { $all: cast.split(',').map(i => new RegExp(i, 'i')) };
@@ -120,17 +127,8 @@ async function main() {
             if (runningTime) {
                 query.runningTime = { $regex: runningTime, $options: 'i' };
             }
-            if (releaseDate) {
-                query.runningTime = { $regex: releaseDate, $options: 'i' };
-            }
-            if (plotSummary) {
-                query['plotSummary.name'] = { $regex: plotSummary, $options: 'i' };
-            }
-            if (reviews) {
-                query['reviews'] = { $all: reviews.split(',').map(i => new RegExp(i, 'i')) };
-            }
-            if (genres) {
-                query['genres._id'] = { $in: genres.split(',').map(id => new ObjectId(id)) };
+            if (title) {
+                query.title = { $regex: title, $options: 'i' };
             }
 
             const movies = await db.collection('movies').find(query).project({
@@ -156,7 +154,7 @@ async function main() {
         try {
             const { title, cast, runningTime, releaseDate, plotSummary, reviews, genres } = req.body;
 
-            if (!title || !cast || !runningTime || !releaseDate || !plotSummary || !reviews || !genres) {
+            if (!title || !plotSummary || !runningTime || !releaseDate || !reviews || !genres) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
@@ -164,30 +162,22 @@ async function main() {
             if (genreDocs.length !== genres.length) {
                 return res.status(400).json({ error: 'One or more invalid genres' });
             }
-    
+
             const newMovie = {
                 title,
-                cast: {
-                    productionCompany: cast.productionCompany,
-                    directedBy: cast.directedBy,
-                    starring: cast.starring
-                },
+                cast,
                 runningTime,
                 releaseDate,
                 plotSummary,
-                reviews: {
-                    RottenTomatoes: reviews.RottenTomatoes,
-                    Metacritic: reviews.Metacritic,
-                    CinemaScore: reviews.CinemaScore
-                },
+                reviews,
                 genres: genreDocs.map(genre => ({
                     _id: genre._id,
                     name: genre.name
                 }))
             };
-    
+
             const result = await db.collection('movies').insertOne(newMovie);
-    
+
             res.status(201).json({
                 message: 'Movie created successfully',
                 movieId: result.insertedId
@@ -197,56 +187,46 @@ async function main() {
             res.status(500).json({ error: 'Internal server error' });
         }
     });
-    
+
+
 
     // MARK: Put - update movie record
     app.put('/movies/:id', async (req, res) => {
         try {
             const movieId = req.params.id;
             const { title, cast, runningTime, releaseDate, plotSummary, reviews, genres } = req.body;
-    
-            if (!title || !cast || !runningTime || !releaseDate || !plotSummary || !reviews || !genres) {
+
+            if (!title || !plotSummary || !runningTime || !releaseDate || !reviews || !genres) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
-    
+
             const genreDocs = await db.collection('genres').find({ name: { $in: genres } }).toArray();
             if (genreDocs.length !== genres.length) {
                 return res.status(400).json({ error: 'One or more invalid genres' });
             }
-    
+
             const updatedMovie = {
                 title,
-                cast: {
-                    productionCompany: cast.productionCompany,
-                    directedBy: cast.directedBy,
-                    starring: cast.starring
-                },
+                cast,
                 runningTime,
                 releaseDate,
                 plotSummary,
-                reviews: {
-                    RottenTomatoes: reviews.RottenTomatoes,
-                    Metacritic: reviews.Metacritic,
-                    CinemaScore: reviews.CinemaScore
-                },
+                reviews,
                 genres: genreDocs.map(genre => ({
                     _id: genre._id,
                     name: genre.name
                 }))
             };
-    
+
             const result = await db.collection('movies').updateOne(
                 { _id: new ObjectId(movieId) },
                 { $set: updatedMovie }
             );
-    
+
             if (result.matchedCount === 0) {
                 return res.status(404).json({ error: 'Movie not found' });
             }
-            if (result.modifiedCount === 0) {
-                return res.status(400).json({ error: 'Movie not modified' });
-            }
-    
+
             res.status(200).json({
                 message: 'Movie updated successfully',
             });
@@ -255,7 +235,6 @@ async function main() {
             res.status(500).json({ error: 'Internal server error' });
         }
     });
-    
 
 
     // MARK: Delete
