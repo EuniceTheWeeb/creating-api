@@ -151,7 +151,7 @@ async function main() {
         }
     });
 
-    // MARK: Post - Creating a movie record
+    // Post - Creating a movie record
     app.post('/movies', async (req, res) => {
         try {
             const { title, cast, runningTime, releaseDate, plotSummary, reviews, genres } = req.body;
@@ -256,7 +256,6 @@ async function main() {
         }
     });
     
-
 
     // MARK: Delete
     app.delete('/movies/:id', async (req, res) => {
